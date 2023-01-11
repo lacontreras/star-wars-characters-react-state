@@ -1,6 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import endpoint from './endpoint';
 
-const CharacterView = ({ character = {} }) => {
+const CharacterView = () => {
+  const params = useParams();
+  const [character, setCharacter] = useState({});
+  useEffect(() => {
+    fetch(endpoint + '/characters/' + params.id)
+      .then((response) => response.json())
+      .then((response) => setCharacter(response.character));
+  }, [params.id]);
   console.log(character);
   return (
     <section className="CharacterView">

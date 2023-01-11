@@ -1,79 +1,87 @@
-import React, { useState } from 'react';
+import React, { useEffect, useReducer } from 'react';
 import ReactDOM from 'react-dom';
+import isFunction from 'lodash/isFunction';
 
-import { BrowserRouter as Router } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 
 import CharacterList from './CharacterList';
-
-import dummyData from './dummy-data';
+import CharacterView from './CharacterView';
 
 import endpoint from './endpoint';
 
 import './styles.scss';
 
-const initialState = {
-  result: null,
-  loading: true,
-  error: null,
-};
-
-const fetchReducer = (state, action) => {
-  if (action.type === 'LOADING') {
+//* this will be a reducer for managing characters. We're gonna separate the asynchronous part of our application from the synchronous state management pieces
+const reducer = (state, action) => {
+  if (action.type === 'FETCHING') {
     return {
-      result: null,
+      characters: [],
       loading: true,
       error: null,
     };
   }
+
   if (action.type === 'RESPONSE_COMPLETE') {
     return {
-      result: action.payload.response,
+      characters: action.payload.characters,
       loading: false,
       error: null,
     };
   }
+
   if (action.type === 'ERROR') {
-    return { result: null, loading: false, error: action.payload.error };
+    return {
+      characters: [],
+      loading: false,
+      error: action.payload.error,
+    };
   }
 
   return state;
 };
 
-const useFetch = (url) => {
-  const [state, dispatch] = React.useReducer(fetchReducer, initialState);
+const fetchCharacters = (dispatch) => {
+  dispatch({ type: 'LOADING' });
+  fetch(endpoint + '/characters')
+    .then((response) => response.json())
+    .then((response) =>
+      dispatch({
+        type: 'RESPONSE_COMPLETE',
+        payload: { characters: response.characters },
+      }),
+    )
+    .catch((error) => dispatch({ type: 'ERROR', payload: { error } }));
+};
 
-  React.useEffect(() => {
-    dispatch({ type: 'LOADING' });
+const initialState = {
+  error: null,
+  loading: false,
+  characters: [],
+};
+//* we want to create something over the dispatch function that says: if this is a normal action (just like we had before), pass dispatch to do the thing. If this is a function, call the function, give it a copy of dispatch and say: you take care of dispatch and whenever you're done doing whatever you're doing, you can go ahead and dispatch actions yourself.
 
-    const fetchUrl = async () => {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        dispatch({ type: 'RESPONSE_COMPLETE', payload: { response: data } });
-      } catch (error) {
-        dispatch({ type: 'ERROR', payload: error });
-      }
-    };
+const useThunkReducer = (reducer, initialState) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-    fetchUrl();
+  const enhancedDispatch = (action) => {
+    console.log(action);
 
-    // fetch(url)
-    //   .then((response) => response.json())
-    //   .then((response) => {
-    //     setLoading(false);
-    //     setResponse(response);
-    //   })
-    //   .catch((error) => {
-    //     setLoading(false);
-    //     setError(error);
-    //   });
-  }, []);
-  return [state.result, state.loading, state.error];
+    if (isFunction(action)) {
+      action(dispatch);
+    } else {
+      dispatch(action);
+    }
+  };
+  return [state, enhancedDispatch];
 };
 
 const Application = () => {
-  const [response, loading, error] = useFetch(endpoint + '/characters');
-  const characters = (response && response.characters) || [];
+  const [state, dispatch] = useThunkReducer(reducer, initialState);
+  const { characters } = state;
+
+  useEffect(() => {
+    dispatch((dispatch) => {});
+  }, []);
 
   return (
     <div className="Application">
@@ -82,12 +90,19 @@ const Application = () => {
       </header>
       <main>
         <section className="sidebar">
-          {loading ? (
-            <p>Loading...</p>
-          ) : (
-            <CharacterList characters={characters} />
-          )}
-          {error && <p className="error">{error.message}</p>}
+          <button
+            onClick={() => {
+              dispatch(fetchCharacters);
+            }}
+          >
+            Fetch Characters
+          </button>
+          <CharacterList characters={characters} />
+        </section>
+        <section className="CharacterView">
+          <Routes>
+            <Route path="characters/:id" element={<CharacterView />} />
+          </Routes>
         </section>
       </main>
     </div>
